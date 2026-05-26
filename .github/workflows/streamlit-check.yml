@@ -1,43 +1,36 @@
 name: Streamlit CI Check
 
-# Workflow ini akan berjalan setiap kali ada push atau pull request ke branch 'main'
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
+  workflow_dispatch:
+  
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-    # ambil kode dari repository branch main
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # menyiapkan environment Python
     - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
         python-version: "3.9"
-        cache: 'pip' 
+        cache: 'pip'
 
-    # instal library dari requirements.txt
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    # cek ada ada syntax error fatal di kode Python
     - name: Lint with flake8
       run: |
         pip install flake8
-        # Menghentikan proses jika ada error fatal seperti variabel tidak terdefinisi (F82) atau syntax error (E9)
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    # test app.py bisa dipanggil tanpa crash
     - name: Test Streamlit App compilation
       run: |
-        # Perintah ini hanya memastikan tidak ada error fatal saat file dieksekusi
         python -m py_compile app.py
