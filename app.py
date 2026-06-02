@@ -35,37 +35,33 @@ if scaler and rf_model:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("**Profil Dasar & Sosial**")
-        age = st.slider("Umur (Tahun)", 13, 24, 16)
-        gender = st.selectbox("Jenis Kelamin", ['Male', 'Female'])
-        social_interaction = st.selectbox("Tingkat Interaksi Sosial (Dunia Nyata)", ['Low', 'Medium', 'High'])
-        physical_activity = st.slider("Aktivitas Fisik / Olahraga (Jam/Hari)", 0.0, 6.0, 1.0, step=0.5)
+        with st.container(border=True):
+            st.markdown("### Profil Dasar & Sosial")
+            age = st.slider("Umur (Tahun)", 13, 24, 16)
+            gender = st.selectbox("Jenis Kelamin", ['Male', 'Female'])
+            social_interaction = st.selectbox("Tingkat Interaksi Sosial (Dunia Nyata)", ['Low', 'Medium', 'High'])
+            physical_activity = st.slider("Aktivitas Fisik / Olahraga (Jam/Hari)", 0.0, 6.0, 1.0, step=0.5)
 
     with col2:
-        st.markdown("**Kebiasaan Digital & Pola Tidur**")
-        st.write("Platform Media Sosial yang Sering Digunakan:")
-        cb_tiktok = st.checkbox("TikTok")
-        cb_instagram = st.checkbox("Instagram")
-        cb_youtube = st.checkbox("YouTube")
-        cb_facebook = st.checkbox("Facebook")
-        cb_others = st.checkbox("Lainnya (Others)")
-
-        daily_sosmed = st.slider("Total Durasi Main Sosmed (Jam/Hari)", 0.0, 18.0, 4.0, step=0.5)
-
-        bedtime = st.selectbox("Jam Berapa Biasanya Mulai Tidur Malam?", 
-                               ["20:00", "21:00", "22:00", "23:00", "00:00", "01:00", "02:00", "03:00"])
-        sleep_hours = st.slider("Berapa Jam Durasi Tidur Biasanya?", 3.0, 12.0, 7.0, step=0.5)
-        screen_before_sleep = st.slider("Screen Time Sebelum Tidur (Jam)", 0.0, 5.0, 1.0, step=0.5)
+        with st.container(border=True):
+            st.markdown("### Kebiasaan Digital & Tidur")
+            daily_sosmed = st.slider("Total Durasi Main Sosmed (Jam/Hari)", 0.0, 18.0, 4.0, step=0.5)
+            bedtime = st.selectbox("Jam Berapa Biasanya Mulai Tidur Malam?", 
+                                   ["20:00", "21:00", "22:00", "23:00", "00:00", "01:00", "02:00", "03:00"])
+            sleep_hours = st.slider("Berapa Jam Durasi Tidur Biasanya?", 3.0, 12.0, 7.0, step=0.5)
+            screen_before_sleep = st.slider("Screen Time Sebelum Tidur (Jam)", 0.0, 5.0, 1.0, step=0.5)
 
     with col3:
-        st.markdown("**Kondisi Psikologis (Self-Assessment)**")
-        stress_level = st.slider("Tingkat Stres (1-10)", 1, 10, 5)
-        anxiety_level = st.slider("Tingkat Kecemasan (1-10)", 1, 10, 5)
-        addiction_level = st.slider("Tingkat Adiksi Gadget (1-10)", 1, 10, 5)
+        with st.container(border=True):
+            st.markdown("### Kondisi Psikologis")
+            st.caption("Self-Assessment")
+            stress_level = st.slider("Tingkat Stres (1-10)", 1, 10, 5)
+            anxiety_level = st.slider("Tingkat Kecemasan (1-10)", 1, 10, 5)
+            addiction_level = st.slider("Tingkat Adiksi Gadget (1-10)", 1, 10, 5)
 
     # --- 4. TOMBOL PREDIKSI & LOGIKA LATAR BELAKANG ---
     st.divider()
-    if st.button("Analisis Status & Dapatkan Rekomendasi", type="primary"):
+    if st.button("Analisis Status & Dapatkan Rekomendasi", type="primary", use_container_width=True):
         with st.spinner("Sedang memproses data perilaku Anda secara spesifik..."):
 
             # A. Kalkulasi Kualitas Tidur
@@ -112,21 +108,7 @@ if scaler and rf_model:
             if gender_col in input_dict:
                 input_dict[gender_col] = 1
 
-            checked_platforms = []
-            if cb_tiktok: checked_platforms.append("TikTok")
-            if cb_instagram: checked_platforms.append("Instagram")
-            if cb_youtube: checked_platforms.append("YouTube")
-            if cb_facebook: checked_platforms.append("Facebook")
-            if cb_others: checked_platforms.append("Others")
-
-            if len(checked_platforms) > 2 or "All Platforms" in checked_platforms:
-                if "platform_usage_All Platforms" in input_dict:
-                    input_dict["platform_usage_All Platforms"] = 1
-            else:
-                for p in checked_platforms:
-                    p_col = f"platform_usage_{p}"
-                    if p_col in input_dict:
-                        input_dict[p_col] = 1
+            # --- BAGIAN PLATFORM DIHAPUS (Sesuai Permintaan) ---
 
             # Prediksi Model
             user_df = pd.DataFrame([input_dict])
@@ -181,7 +163,7 @@ if scaler and rf_model:
                     recommendations.append(("warning", "**Perhatian Ringan:** Meski kebiasaan harian Anda secara umum cukup baik, pastikan tingkat stres atau adiksi gadget tidak dibiarkan meningkat secara perlahan."))
             # =========================================================================
 
-            # --- TAMPILAN OUTPUT ---
+            # --- TAMPILAN OUTPUT (TETAP SAMA) ---
             st.subheader("Hasil Analisis Terkini")
             res_col1, res_col2 = st.columns([1, 1.5])
 
