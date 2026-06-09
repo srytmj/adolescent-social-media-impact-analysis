@@ -13,7 +13,7 @@ Selain prediksi, aplikasi ini juga menyediakan rekomendasi sederhana yang disesu
 | 📖 [Glosarium Istilah Teknis](docs/glossary.md) | Daftar istilah ML, statistik, dan kesehatan digital |
 | 📋 [Data Dictionary](docs/data_dictionary.md) | Deskripsi lengkap setiap kolom dataset |
 | 🔀 [Flowchart Pipeline](docs/flowchart.md) | Alur kerja proyek dari NB1 hingga Streamlit |
-| 📝 [Laporan](docs/laporan/) | Laporan akademik BAB I–V |
+| 📝 [Laporan](docs/laporan/index.md) | Laporan akademik BAB I–V |
 
 ## Struktur Direktori
 
