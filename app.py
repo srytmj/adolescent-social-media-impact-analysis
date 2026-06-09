@@ -1,194 +1,448 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
 
-# --- 1. KONFIGURASI HALAMAN ---
+# ─────────────────────────────────────────────
+# KONFIGURASI HALAMAN
+# ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Teen & Young Adult Digital Wellbeing",
+    page_title="Teen Digital Wellbeing Predictor",
     layout="wide"
 )
 
-# --- 2. MEMUAT MODEL & SCALER ---
+# ─────────────────────────────────────────────
+# LOAD MODEL & SCALER
+# ─────────────────────────────────────────────
 @st.cache_resource
-def load_models():
-    try:
-        scaler = joblib.load('models/scaler.pkl')
-        rf_model = joblib.load('models/classifier_model.pkl')
-        return scaler, rf_model
-    except Exception as e:
-        st.error(f"Gagal memuat model. Error: {e}")
-        return None, None
+def load_artifacts():
+    model  = joblib.load('models/classifier_model.pkl')
+    scaler = joblib.load('models/scaler.pkl')
+    return model, scaler
 
-scaler, rf_model = load_models()
+model, scaler = load_artifacts()
 
-# --- 3. ANTARMUKA PENGGUNA (UI) ---
-st.title("Screening Kesejahteraan Digital Remaja & Dewasa Muda")
-st.markdown("""
-Aplikasi ini memprediksi status **Kesejahteraan Digital** dan memberikan **rekomendasi psikologis yang dipersonalisasi** berdasarkan kombinasi unik dari pola perilaku harian Anda.
-""")
+# ─────────────────────────────────────────────
+# KONSTANTA
+# ─────────────────────────────────────────────
+COLOR_MAP = {
+    'Healthy' : '#2ecc71',
+    'Moderate': '#f39c12',
+    'At Risk' : '#e74c3c'
+}
+
+RGBA_MAP = {
+    'Healthy' : 'rgba(46, 204, 113, 0.15)',
+    'Moderate': 'rgba(243, 156, 18, 0.15)',
+    'At Risk' : 'rgba(231, 76, 60, 0.15)'
+}
+
+LABEL_MAP = {0: 'Healthy', 1: 'Moderate', 2: 'At Risk'}
+
+REKOMENDASI = {
+    0: {
+        'deskripsi': (
+            'Remaja ini menunjukkan pola perilaku digital yang sehat '
+            'dan kesejahteraan mental yang baik. Pertahankan kebiasaan '
+            'positif yang sudah terbentuk.'
+        ),
+        'saran': [
+            'Pertahankan keseimbangan waktu penggunaan media sosial.',
+            'Jaga rutinitas tidur yang teratur dan berkualitas.',
+            'Terus aktif secara fisik minimal 30 menit per hari.',
+            'Pertahankan interaksi sosial yang positif.',
+            'Lakukan evaluasi berkala terhadap kebiasaan digital.',
+        ]
+    },
+    1: {
+        'deskripsi': (
+            'Remaja ini menunjukkan beberapa tanda yang perlu '
+            'diperhatikan terkait perilaku digital dan kesehatan '
+            'mental. Diperlukan penyesuaian kebiasaan sebelum '
+            'kondisi memburuk.'
+        ),
+        'saran': [
+            'Batasi penggunaan media sosial maksimal 3 jam per hari.',
+            'Hindari penggunaan gadget minimal 1 jam sebelum tidur.',
+            'Tingkatkan aktivitas fisik setidaknya 30 menit per hari.',
+            'Perbanyak interaksi sosial secara langsung (offline).',
+            'Bicarakan perasaan dengan orang tua atau konselor sekolah.',
+            'Terapkan jadwal penggunaan gadget yang terstruktur.',
+        ]
+    },
+    2: {
+        'deskripsi': (
+            'Remaja ini menunjukkan indikator risiko tinggi terhadap '
+            'gangguan kesehatan mental akibat perilaku digital yang '
+            'tidak sehat. Diperlukan intervensi segera.'
+        ),
+        'saran': [
+            'Segera konsultasikan dengan psikolog atau konselor profesional.',
+            'Kurangi drastis penggunaan media sosial (maksimal 1-2 jam/hari).',
+            'Terapkan digital detox secara bertahap dan terstruktur.',
+            'Pastikan tidur 8-10 jam per malam dengan kualitas yang baik.',
+            'Libatkan orang tua dalam mendampingi perubahan kebiasaan digital.',
+            'Ikuti kegiatan ekstrakurikuler atau komunitas positif.',
+            'Hindari penggunaan gadget di kamar tidur.',
+        ]
+    }
+}
+
+# ─────────────────────────────────────────────
+# FUNGSI PREPROCESSING
+# ─────────────────────────────────────────────
+def preprocess_input(data: dict) -> pd.DataFrame:
+    social_map = {'low': 0, 'medium': 1, 'high': 2}
+    sleep_map  = {'Poor': 0, 'Fair': 1, 'Good': 2}
+
+    total_screen = (
+        data['daily_social_media_hours'] + 
+        data['screen_time_before_sleep']
+    )
+    sleep_eff = data['sleep_hours'] / (data['screen_time_before_sleep'] + 1)
+    high_usage = int(data['daily_social_media_hours'] > 5)
+    active     = int(data['physical_activity'] >= 1)
+
+    row = {
+        'age'                      : data['age'],
+        'daily_social_media_hours' : data['daily_social_media_hours'],
+        'sleep_hours'              : data['sleep_hours'],
+        'screen_time_before_sleep' : data['screen_time_before_sleep'],
+        'academic_performance'     : data['academic_performance'],
+        'physical_activity'        : data['physical_activity'],
+        'social_interaction_level' : social_map[data['social_interaction_level']],
+        'stress_level'             : data['stress_level'],
+        'anxiety_level'            : data['anxiety_level'],
+        'addiction_level'          : data['addiction_level'],
+        'total_screen_exposure'    : total_screen,
+        'sleep_efficiency'         : sleep_eff,
+        'high_social_media_usage'  : high_usage,
+        'active_lifestyle'         : active,
+        'sleep_quality_encoded'    : sleep_map[data['sleep_quality']],
+        'gender_male'              : int(data['gender'] == 'Male'),
+    }
+
+    df_input  = pd.DataFrame([row])
+    df_scaled = pd.DataFrame(
+        scaler.transform(df_input),
+        columns=df_input.columns
+    )
+    return df_scaled
+
+# ─────────────────────────────────────────────
+# FUNGSI VISUALISASI PROBABILITAS
+# ─────────────────────────────────────────────
+# Grafik probabilitas — update warna teks agar 
+# terbaca di dark mode
+def plot_probabilitas(proba: np.ndarray):
+    kategori = ['Healthy', 'Moderate', 'At Risk']
+    warna    = [COLOR_MAP[k] for k in kategori]
+    nilai    = [p * 100 for p in proba]
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+
+    # Background transparan agar ikut tema Streamlit
+    fig.patch.set_alpha(0)
+    ax.patch.set_alpha(0)
+
+    bars = ax.barh(kategori, nilai, color=warna, height=0.5)
+
+    for bar, val in zip(bars, nilai):
+        ax.text(
+            bar.get_width() + 0.5,
+            bar.get_y() + bar.get_height() / 2,
+            f'{val:.1f}%',
+            va='center',
+            fontsize=11,
+            fontweight='bold',
+            color='white'  # putih agar terbaca di dark mode
+        )
+
+    ax.set_xlim(0, 115)
+    ax.set_xlabel('Probabilitas (%)', fontsize=10, color='white')
+    ax.set_title('Probabilitas per Kategori', 
+                 fontsize=12, pad=10, color='white')
+    ax.tick_params(colors='white')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('white')
+    ax.spines['left'].set_color('white')
+    plt.tight_layout()
+    return fig
+
+# ─────────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────────
+st.title('Teen Digital Wellbeing Predictor')
+st.markdown(
+    'Aplikasi prediksi status kesejahteraan digital remaja berdasarkan '
+    'pola perilaku digital dan indikator kesehatan mental. '
+    'Isi formulir di sidebar untuk mendapatkan hasil prediksi.'
+)
 st.divider()
 
-if scaler and rf_model:
-    st.subheader("Formulir Kebiasaan Harian")
+# ─────────────────────────────────────────────
+# SIDEBAR — INPUT
+# ─────────────────────────────────────────────
+with st.sidebar:
+    st.header('Data Remaja')
+    st.caption('Isi seluruh data di bawah ini dengan lengkap.')
+
+    st.subheader('Informasi Umum')
+    age    = st.slider('Usia (tahun)', 13, 19, 16)
+    gender = st.selectbox('Jenis Kelamin', ['Male', 'Female'])
+
+    st.subheader('Perilaku Digital')
+    daily_social_media_hours = st.slider(
+        'Durasi Media Sosial per Hari (jam)', 
+        1.0, 8.0, 4.0, step=0.1
+    )
+    screen_time_before_sleep = st.slider(
+        'Screen Time Sebelum Tidur (jam)', 
+        0.5, 3.0, 1.5, step=0.1
+    )
+    addiction_level = st.slider(
+        'Tingkat Kecanduan Media Sosial (1-10)', 
+        1, 10, 5
+    )
+
+    st.subheader('Pola Tidur')
+    sleep_hours   = st.slider(
+        'Durasi Tidur per Malam (jam)', 
+        4.0, 9.0, 7.0, step=0.1
+    )
+    sleep_quality = st.selectbox(
+        'Kualitas Tidur', 
+        ['Poor', 'Fair', 'Good']
+    )
+
+    st.subheader('Kesehatan & Akademik')
+    academic_performance = st.slider(
+        'Nilai Akademik (GPA 2.0 - 4.0)', 
+        2.0, 4.0, 3.0, step=0.01
+    )
+    physical_activity = st.slider(
+        'Aktivitas Fisik per Hari (jam)', 
+        0.0, 2.0, 1.0, step=0.1
+    )
+    social_interaction_level = st.selectbox(
+        'Tingkat Interaksi Sosial', 
+        ['low', 'medium', 'high']
+    )
+
+    st.subheader('Kondisi Psikologis')
+    stress_level  = st.slider('Tingkat Stres (1-10)', 1, 10, 5)
+    anxiety_level = st.slider('Tingkat Kecemasan (1-10)', 1, 10, 5)
+
+    st.divider()
+    tombol = st.button(
+        'Prediksi Sekarang', 
+        type='primary', 
+        use_container_width=True
+    )
+
+# ─────────────────────────────────────────────
+# MAIN — HASIL PREDIKSI
+# ─────────────────────────────────────────────
+if tombol:
+    input_data = {
+        'age'                      : age,
+        'gender'                   : gender,
+        'daily_social_media_hours' : daily_social_media_hours,
+        'screen_time_before_sleep' : screen_time_before_sleep,
+        'sleep_hours'              : sleep_hours,
+        'sleep_quality'            : sleep_quality,
+        'academic_performance'     : academic_performance,
+        'physical_activity'        : physical_activity,
+        'social_interaction_level' : social_interaction_level,
+        'stress_level'             : stress_level,
+        'anxiety_level'            : anxiety_level,
+        'addiction_level'          : addiction_level,
+    }
+
+    # Preprocessing & Prediksi
+    X_input    = preprocess_input(input_data)
+    pred_label = model.predict(X_input)[0]
+    pred_proba = model.predict_proba(X_input)[0]
+    pred_nama  = LABEL_MAP[pred_label]
+    rec        = REKOMENDASI[pred_label]
+    warna      = COLOR_MAP[pred_nama]
+
+    # Layout dua kolom
+    col_kiri, col_kanan = st.columns([1, 1], gap='large')
+
+    with col_kiri:
+        st.subheader('Hasil Prediksi')
+
+        # Badge status hasil prediksi
+        st.markdown(
+            f"""
+            <div style="
+                background-color: {RGBA_MAP[pred_nama]};
+                border-left: 5px solid {warna};
+                padding: 16px 20px;
+                border-radius: 8px;
+                margin-bottom: 16px;
+            ">
+                <span style="
+                    font-size: 22px;
+                    font-weight: bold;
+                    color: {warna};
+                ">Status: {pred_nama}</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.write(rec['deskripsi'])
+        st.divider()
+
+        # Grafik probabilitas
+        fig = plot_probabilitas(pred_proba)
+        st.pyplot(fig)
+
+    with col_kanan:
+        st.subheader('Rekomendasi')
+        st.markdown(
+            f'Berdasarkan hasil prediksi **{pred_nama}**, '
+            'berikut langkah-langkah yang disarankan:'
+        )
+
+        # List rekomendasi
+        for i, saran in enumerate(rec['saran'], start=1):
+            st.markdown(
+                f"""
+                <div style="
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border-radius: 8px;
+                    padding: 10px 15px;
+                    margin-bottom: 8px;
+                    border-left: 3px solid {warna};
+                ">
+                    <span style="font-weight:bold; color:{warna};">
+                        {i}.
+                    </span> {saran}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # Detail fitur (expandable)
+        st.divider()
+        with st.expander('Lihat Ringkasan Data yang Diinput'):
+            ringkasan = pd.DataFrame({
+                'Variabel': [
+                    'Usia', 'Jenis Kelamin', 'Durasi Media Sosial',
+                    'Screen Time Sebelum Tidur', 'Durasi Tidur',
+                    'Kualitas Tidur', 'Nilai Akademik',
+                    'Aktivitas Fisik', 'Interaksi Sosial',
+                    'Tingkat Stres', 'Tingkat Kecemasan',
+                    'Tingkat Kecanduan'
+                ],
+                'Nilai': [
+                    f'{age} tahun',
+                    gender,
+                    f'{daily_social_media_hours} jam/hari',
+                    f'{screen_time_before_sleep} jam',
+                    f'{sleep_hours} jam/malam',
+                    sleep_quality,
+                    f'{academic_performance:.2f}',
+                    f'{physical_activity} jam/hari',
+                    social_interaction_level,
+                    f'{stress_level}/10',
+                    f'{anxiety_level}/10',
+                    f'{addiction_level}/10'
+                ]
+            })
+            st.dataframe(
+                ringkasan, 
+                hide_index=True, 
+                use_container_width=True
+            )
+
+else:
+    # Tampilan default sebelum prediksi
+    st.info(
+        'Isi formulir di sidebar kiri, kemudian klik '
+        'tombol "Prediksi Sekarang" untuk melihat hasil.'
+    )
+
+    st.subheader('Tentang Aplikasi')
+    st.markdown(
+        '''
+        Aplikasi ini menggunakan model **Random Forest Classifier** 
+        yang telah dilatih pada dataset perilaku digital dan 
+        kesehatan mental remaja usia 13–19 tahun.
+
+        Model memprediksi status kesejahteraan digital remaja ke 
+        dalam tiga kategori:
+        '''
+    )
 
     col1, col2, col3 = st.columns(3)
 
+    # Card kategori di halaman default
     with col1:
-        with st.container(border=True):
-            st.markdown("### Profil Dasar & Sosial")
-            age = st.slider("Umur (Tahun)", 13, 24, 16)
-            gender = st.selectbox("Jenis Kelamin", ['Male', 'Female'])
-            social_interaction = st.selectbox("Tingkat Interaksi Sosial (Dunia Nyata)", ['Low', 'Medium', 'High'])
-            physical_activity = st.slider("Aktivitas Fisik / Olahraga (Jam/Hari)", 0.0, 6.0, 1.0, step=0.5)
+        st.markdown(
+            f"""
+            <div style="
+                background-color: rgba(46, 204, 113, 0.15);
+                border-left: 5px solid #2ecc71;
+                padding: 16px;
+                border-radius: 8px;
+            ">
+                <b style="color:#2ecc71; font-size:16px;">Healthy</b>
+                <p style="margin-top:8px; font-size:14px;">
+                Pola perilaku digital sehat dan kesejahteraan 
+                mental yang baik.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with col2:
-        with st.container(border=True):
-            st.markdown("### Kebiasaan Digital & Tidur")
-            daily_sosmed = st.slider("Total Durasi Main Sosmed (Jam/Hari)", 0.0, 18.0, 4.0, step=0.5)
-            bedtime = st.selectbox("Jam Berapa Biasanya Mulai Tidur Malam?", 
-                                   ["20:00", "21:00", "22:00", "23:00", "00:00", "01:00", "02:00", "03:00"])
-            sleep_hours = st.slider("Berapa Jam Durasi Tidur Biasanya?", 3.0, 12.0, 7.0, step=0.5)
-            screen_before_sleep = st.slider("Screen Time Sebelum Tidur (Jam)", 0.0, 5.0, 1.0, step=0.5)
+        st.markdown(
+            f"""
+            <div style="
+                background-color: rgba(243, 156, 18, 0.15);
+                border-left: 5px solid #f39c12;
+                padding: 16px;
+                border-radius: 8px;
+            ">
+                <b style="color:#f39c12; font-size:16px;">Moderate</b>
+                <p style="margin-top:8px; font-size:14px;">
+                Terdapat beberapa tanda yang perlu diperhatikan 
+                dan diwaspadai.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with col3:
-        with st.container(border=True):
-            st.markdown("### Kondisi Psikologis")
-            st.caption("Self-Assessment")
-            stress_level = st.slider("Tingkat Stres (1-10)", 1, 10, 5)
-            anxiety_level = st.slider("Tingkat Kecemasan (1-10)", 1, 10, 5)
-            addiction_level = st.slider("Tingkat Adiksi Gadget (1-10)", 1, 10, 5)
+        st.markdown(
+            f"""
+            <div style="
+                background-color: rgba(231, 76, 60, 0.15);
+                border-left: 5px solid #e74c3c;
+                padding: 16px;
+                border-radius: 8px;
+            ">
+                <b style="color:#e74c3c; font-size:16px;">At Risk</b>
+                <p style="margin-top:8px; font-size:14px;">
+                Indikator risiko tinggi yang memerlukan 
+                intervensi segera.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    # --- 4. TOMBOL PREDIKSI & LOGIKA LATAR BELAKANG ---
     st.divider()
-    if st.button("Analisis Status & Dapatkan Rekomendasi", type="primary", use_container_width=True):
-        with st.spinner("Sedang memproses data perilaku Anda secara spesifik..."):
-
-            # A. Kalkulasi Kualitas Tidur
-            bedtime_hour = int(bedtime.split(":")[0])
-            if bedtime_hour < 12:  
-                bedtime_hour += 24
-
-            if sleep_hours >= 7 and screen_before_sleep <= 1.0 and bedtime_hour <= 23:
-                calculated_sleep_quality = 2  # Good
-            elif sleep_hours < 5.5 or screen_before_sleep >= 2.0 or bedtime_hour >= 24:
-                calculated_sleep_quality = 0  # Poor
-            else:
-                calculated_sleep_quality = 1  # Fair
-
-            soc_map = {'Low': 0, 'Medium': 1, 'High': 2}
-
-            # Feature Engineering
-            tot_screen = daily_sosmed + screen_before_sleep
-            sleep_eff = sleep_hours / (screen_before_sleep + 1)
-            high_sosmed = 1 if daily_sosmed > 5 else 0
-            active_life = 1 if physical_activity >= 1 else 0
-
-            # Menyiapkan Input untuk Model
-            input_dict = {col: 0 for col in scaler.feature_names_in_}
-            input_dict['academic_performance'] = 3.2 
-
-            input_dict['age'] = age
-            input_dict['daily_social_media_hours'] = daily_sosmed
-            input_dict['sleep_hours'] = sleep_hours
-            input_dict['screen_time_before_sleep'] = screen_before_sleep
-            input_dict['physical_activity'] = physical_activity
-            input_dict['stress_level'] = stress_level
-            input_dict['anxiety_level'] = anxiety_level
-            input_dict['addiction_level'] = addiction_level
-            input_dict['social_interaction_level'] = soc_map[social_interaction]
-            input_dict['sleep_quality_encoded'] = calculated_sleep_quality
-
-            input_dict['total_screen_exposure'] = tot_screen
-            input_dict['sleep_efficiency'] = sleep_eff
-            input_dict['high_social_media_usage'] = high_sosmed
-            input_dict['active_lifestyle'] = active_life
-
-            gender_col = f"gender_{gender.lower()}"
-            if gender_col in input_dict:
-                input_dict[gender_col] = 1
-
-            # --- BAGIAN PLATFORM DIHAPUS (Sesuai Permintaan) ---
-
-            # Prediksi Model
-            user_df = pd.DataFrame([input_dict])
-            user_scaled = scaler.transform(user_df)
-
-            pred_class = rf_model.predict(user_scaled)[0]
-            pred_proba = rf_model.predict_proba(user_scaled)[0]
-
-            status_labels = ["SEHAT (Healthy)", "SEDANG (Moderate)", "BERISIKO TINGGI (At Risk)"]
-            sleep_labels = ["Buruk (Poor)", "Cukup (Fair)", "Baik (Good)"]
-
-            # =========================================================================
-            # --- MESIN REKOMENDASI DINAMIS (Menggunakan Tuple untuk Tipe Alert) ---
-            # =========================================================================
-            recommendations = []
-
-            # 1. Pengecekan Kecemasan (Anxiety)
-            if anxiety_level >= 7:
-                if addiction_level >= 6 or daily_sosmed >= 5:
-                    recommendations.append(("error", "**Kecemasan Terkait Digital:** Tingkat kecemasan Anda sangat tinggi bersamaan dengan tingginya paparan layar. Ini bisa jadi tanda overstimulasi atau FOMO (Fear of Missing Out). Sangat disarankan untuk mengurangi durasi sosmed secara bertahap."))
-                else:
-                    recommendations.append(("error", "**Indikasi Kecemasan Non-Digital:** Tingkat kecemasan Anda tinggi meskipun penggunaan gadget Anda masih wajar. Ini menandakan stresor dari luar (akademik, tekanan sosial, keluarga). Jangan ragu untuk bercerita ke konselor atau profesional."))
-
-            # 2. Pengecekan Stres (Stress)
-            if stress_level >= 7:
-                if calculated_sleep_quality == 0:
-                    recommendations.append(("error", "**Lingkaran Setan Stres & Kurang Tidur:** Stres Anda tinggi dan diperburuk oleh kualitas tidur yang buruk. Prioritaskan jam tidur. Matikan layar HP minimal 1 jam sebelum tidur agar pikiran bisa rileks."))
-                else:
-                    recommendations.append(("error", "**Manajemen Stres Darurat:** Anda mengalami tingkat stres yang mengkhawatirkan. Coba alihkan pikiran dengan melakukan aktivitas fisik di luar ruangan atau praktikkan pernapasan relaksasi setiap malam."))
-
-            # 3. Pengecekan Adiksi (Addiction)
-            if addiction_level >= 7:
-                recommendations.append(("error", "**Peringatan Adiksi Gadget:** Anda menunjukkan indikasi ketergantungan smartphone yang tinggi. Mulailah gunakan fitur pembatas waktu aplikasi di pengaturan perangkat Anda."))
-
-            # 4. Pengecekan Kebiasaan Malam (Screen Time)
-            if screen_before_sleep >= 2.0:
-                recommendations.append(("error", "**Bahaya Paparan Cahaya Biru:** Menatap layar 2 jam atau lebih sebelum tidur akan merusak produksi hormon melatonin. Kebiasaan ini dapat memicu insomnia berkepanjangan."))
-
-            # 5. Pengecekan Aktivitas Fisik
-            if physical_activity < 1.0:
-                recommendations.append(("warning", "**Tubuh Kurang Gerak:** Aktivitas fisik Anda di bawah 1 jam. Olahraga ringan (seperti jalan santai) adalah cara paling alami dan ampuh untuk membuang hormon stres dari tubuh."))
-
-            # 6. Pengecekan Kehidupan Sosial
-            if social_interaction == 'Low':
-                recommendations.append(("warning", "**Waspada Isolasi Sosial:** Interaksi di dunia nyata Anda sangat rendah. Cobalah untuk sekadar mengobrol langsung dengan keluarga di rumah atau teman untuk menjaga keseimbangan sosial Anda."))
-
-            # 7. Fallback (Jika sehat)
-            if len(recommendations) == 0:
-                if stress_level <= 4 and anxiety_level <= 4 and addiction_level <= 4:
-                    recommendations.append(("success", "**Pertahankan Gaya Hidup Ini!** Pola tidur, durasi penggunaan media sosial, dan indikator stres/kecemasan Anda berada dalam harmoni yang sangat baik. Lanjutkan rutinitas positif Anda."))
-                else:
-                    recommendations.append(("warning", "**Perhatian Ringan:** Meski kebiasaan harian Anda secara umum cukup baik, pastikan tingkat stres atau adiksi gadget tidak dibiarkan meningkat secara perlahan."))
-            # =========================================================================
-
-            # --- TAMPILAN OUTPUT (TETAP SAMA) ---
-            st.subheader("Hasil Analisis Terkini")
-            res_col1, res_col2 = st.columns([1, 1.5])
-
-            with res_col1:
-                if pred_class == 0:
-                    st.success(f"### {status_labels[0]}")
-                elif pred_class == 1:
-                    st.warning(f"### {status_labels[1]}")
-                else:
-                    st.error(f"### {status_labels[2]}")
-
-                st.write(f"**Kualitas Tidur (Estimasi):** {sleep_labels[calculated_sleep_quality]}")
-                st.write("**Probabilitas Prediksi:**")
-                st.write(f"- Sehat: {pred_proba[0]*100:.1f}%")
-                st.write(f"- Sedang: {pred_proba[1]*100:.1f}%")
-                st.write(f"- Berisiko: {pred_proba[2]*100:.1f}%")
-
-            with res_col2:
-                st.markdown(f"**Rekomendasi Khusus Untuk Anda ({len(recommendations)} Poin Penting):**")
-
-                # Render rekomendasi berdasarkan tipe tuple
-                for alert_type, text in recommendations:
-                    if alert_type == "error":
-                        st.error(text)
-                    elif alert_type == "success":
-                        st.success(text)
-                    else:
-                        st.warning(text)
+    st.caption(
+        'Teen Digital Wellbeing Predictor — '
+        'Proyek Machine Learning | CRISP-DM Framework'
+    )

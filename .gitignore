@@ -1,3 +1,30 @@
-notebooks/data
-notebooks/cifar_net.pth
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Jupyter
 .ipynb_checkpoints/
+
+# Data
+# data/
+
+# Model
+# models/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
